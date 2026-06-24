@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ember & Tide — A Castle Co-op</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    background:
+      radial-gradient(ellipse at 50% -20%, #2a1f3a 0%, transparent 55%),
+      #0a0710;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:100vh;
+    font-family:'Cormorant Garamond',serif;
+    overflow:hidden;user-select:none;
+    padding:16px;
+  }
+  #ui{
+    display:flex;align-items:center;justify-content:space-between;
+    width:760px;max-width:98vw;padding:6px 14px;
+  }
+  .player-label{
+    font-family:'Cinzel',serif;font-size:0.92rem;font-weight:600;
+    letter-spacing:0.06em;display:flex;align-items:center;gap:9px;
+  }
+  .fire-label{color:#ff8a3d;text-shadow:0 0 14px rgba(255,90,20,0.5);}
+  .water-label{color:#5cc6e8;text-shadow:0 0 14px rgba(40,160,220,0.5);}
+  .crest{width:22px;height:26px;position:relative;}
+  .crest svg{width:100%;height:100%;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));}
+  #level-info{
+    font-family:'Cinzel',serif;font-size:0.95rem;font-weight:800;
+    color:#d8c38a;letter-spacing:0.14em;
+    text-shadow:0 0 18px rgba(180,140,60,0.4);
+  }
+  #canvas-wrap{
+    position:relative;
+    border:3px solid #2a2038;
+    border-radius:4px;overflow:hidden;
+    box-shadow:
+      0 0 0 1px rgba(180,140,70,0.25),
+      0 30px 70px -20px rgba(0,0,0,0.9),
+      inset 0 0 120px rgba(0,0,0,0.5);
+  }
+  canvas{display:block;}
+  #overlay{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;
+    background:radial-gradient(ellipse at center,rgba(20,12,30,0.82),rgba(6,4,12,0.94));
+    backdrop-filter:blur(3px);transition:opacity 0.35s;
+    padding:30px;text-align:center;
+  }
+  #overlay.gone{opacity:0;pointer-events:none;}
+  #overlay h2{
+    font-family:'Cinzel',serif;font-size:2.1rem;font-weight:800;letter-spacing:0.05em;
+    background:linear-gradient(100deg,#ff8a3d 0%,#ffd36b 38%,#9adcf0 62%,#5cc6e8 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 2px 20px rgba(255,180,80,0.25));
+  }
+  #overlay .scroll{
+    color:#cdb89a;font-size:1.12rem;max-width:440px;line-height:1.5;font-style:italic;
+  }
+  .key-guide{display:flex;gap:38px;margin-top:4px;}
+  .key-guide span{display:flex;flex-direction:column;align-items:center;gap:5px;color:#9a8a76;font-size:0.92rem;}
+  .key-guide strong{font-family:'Cinzel',serif;font-size:0.95rem;letter-spacing:0.08em;}
+  .fire-key{color:#ff9a52;}
+  .water-key{color:#6dd0ee;}
+  #msg{font-family:'Cinzel',serif;font-size:1.35rem;color:#f4e4c1;letter-spacing:0.03em;
+       text-shadow:0 0 22px rgba(255,210,120,0.6);min-height:1.4rem;}
+  #start-btn{
+    font-family:'Cinzel',serif;font-size:0.92rem;font-weight:800;letter-spacing:0.16em;
+    text-transform:uppercase;
+    background:linear-gradient(180deg,#3a2c1c,#241a10);
+    color:#f0d9a8;border:1px solid #6b5028;padding:13px 40px;border-radius:2px;cursor:pointer;
+    box-shadow:0 6px 24px -6px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,210,140,0.2);
+    transition:transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+  }
+  #start-btn:hover{transform:translateY(-2px);border-color:#a07838;
+    box-shadow:0 12px 30px -8px rgba(0,0,0,0.9), 0 0 24px rgba(180,130,50,0.35), inset 0 1px 0 rgba(255,210,140,0.3);}
+  #start-btn:active{transform:translateY(0);}
+  .hint-bar{
+    width:760px;max-width:98vw;text-align:center;color:#6a5d72;
+    font-size:0.96rem;font-style:italic;margin-top:10px;letter-spacing:0.02em;
+  }
+  .hint-bar b{color:#9a8466;font-style:normal;}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div class="player-label fire-label">
+    <div class="crest"><svg viewBox="0 0 22 26"><path d="M11 0 L22 5 V14 C22 21 11 26 11 26 C11 26 0 21 0 14 V5 Z" fill="#5a2a12" stroke="#b06028" stroke-width="1"/><path d="M11 7 c-3 2 -3 5 -1 7 c-1 -3 1 -4 1 -4 c0 0 2 2 1 5 c2 -2 3 -5 -2 -8z" fill="#ff8a3d"/></svg></div>
+    Ember · WASD
+  </div>
+  <div id="level-info">Hall I</div>
+  <div class="player-label water-label">
+    Tide · Arrows
+    <div class="crest"><svg viewBox="0 0 22 26"><path d="M11 0 L22 5 V14 C22 21 11 26 11 26 C11 26 0 21 0 14 V5 Z" fill="#12304a" stroke="#2f7ba0" stroke-width="1"/><path d="M11 6 c3 4 5 7 5 10 a5 5 0 0 1 -10 0 c0 -3 2 -6 5 -10z" fill="#5cc6e8"/></svg></div>
+  </div>
+</div>
+<div id="canvas-wrap">
+  <canvas id="c" width="760" height="500"></canvas>
+  <div id="overlay">
+    <h2>Ember &amp; Tide</h2>
+    <p class="scroll">Two spirits are bound within the old keep. Ember wades through fire; Tide flows through water. Guide both to their gates — but green ichor slays them both. Gather the relics as you climb.</p>
+    <div class="key-guide">
+      <span><strong class="fire-key">W A S D</strong>Ember</span>
+      <span><strong class="water-key">← ↑ →</strong>Tide</span>
+    </div>
+    <div id="msg"></div>
+    <button id="start-btn">Enter the Keep</button>
+  </div>
+</div>
+<div class="hint-bar">Springboards <b>fling</b> you high · climb <b>ladders</b> with up/down · avoid the swinging <b>blades</b></div>
+
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+const overlay=document.getElementById('overlay');
+const msgEl=document.getElementById('msg');
+const startBtn=document.getElementById('start-btn');
+const levelInfo=document.getElementById('level-info');
+
+/* ── PHYSICS CONSTANTS ── */
+const GRAV=0.62;
+const SPEED=3.4;
+const JUMP=-12.2;          // base jump height (~ clears 105px gaps when timed)
+const BOUNCE=-18.5;        // springboard launch
+const CLIMB=2.6;
+const PW=20,PH=30;
+const MAXVY=17;
+
+/* Reachability note:
+   jump apex ≈ JUMP^2/(2*GRAV) ≈ 12.2^2/1.24 ≈ 120px.
+   So vertical gaps between a floor and the next platform are kept ≤ 96px,
+   and anything higher is reached via springboard (bounce apex ≈ 276px) or ladder. */
+
+/* ── INPUT ── */
+const keys={};
+addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+  keys[e.code]=true;
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+
+/* ── ROMAN ── */
+const ROM=['I','II','III','IV','V'];
+
+/* ── LEVELS ──
+   Components:
+   platforms:[{x,y,w,h}]  solid stone
+   lava/water/toxic:[{x,y,w,h}]  hazards
+   springs:[{x,y}]  bounce pads (28w) — launch upward
+   ladders:[{x,y,h}]  climbable (24w)
+   spikes:[{x,y,w}]  floor spikes (deadly to both)
+   blade:[{x,y,len,phase}]  swinging pendulum blade (deadly to both)
+   fireGems/waterGems:[{x,y}]
+   fireDoor/waterDoor/fireStart/waterStart:{x,y}
+*/
+/* Door geometry: a door is 36 wide, 54 tall, drawn from its (x,y) top down to y+54.
+   Its base rests at y+54, so a door at y = (platformTop - 54) sits on that platform.
+   Floor top = 470, so a ground-level door uses y = 470-54 = 416.
+   Every door below sits directly on the floor or a ledge the players can stand on,
+   reachable on foot/ladder/spring without crossing a same-element-fatal hazard. */
+const LEVELS=[
+  /* ── HALL I — gentle intro. Doors on the floor, both at ground level. ── */
+  {
+    platforms:[
+      {x:0,y:470,w:760,h:30},          // floor
+      {x:0,y:0,w:18,h:500},{x:742,y:0,w:18,h:500}, // walls
+      {x:120,y:388,w:130,h:18},        // low left ledge
+      {x:510,y:388,w:130,h:18},        // low right ledge
+      {x:300,y:300,w:160,h:18},        // mid centre
+      {x:120,y:212,w:130,h:18},        // upper left
+      {x:510,y:212,w:130,h:18},        // upper right
+    ],
+    lava:[{x:265,y:452,w:90,h:18}],    // fire-safe pool, left-centre
+    water:[{x:405,y:452,w:90,h:18}],   // water-safe pool, right-centre
+    toxic:[],
+    springs:[{x:355,y:288}],           // on the mid-centre platform → reach upper ledges
+    ladders:[{x:160,y:212,h:176},{x:560,y:212,h:176}], // low ledge ↔ upper ledge each side
+    spikes:[],
+    blades:[],
+    fireGems:[{x:175,y:360},{x:175,y:184}],
+    waterGems:[{x:565,y:360},{x:565,y:184}],
+    fireDoor:{x:40,y:416},             // ground level, left
+    waterDoor:{x:680,y:416},           // ground level, right
+    fireStart:{x:90,y:435},
+    waterStart:{x:640,y:435},
+  },
+  /* ── HALL II — ladders + one blade. Doors on the low side ledges. ── */
+  {
+    platforms:[
+      {x:0,y:470,w:760,h:30},
+      {x:0,y:0,w:18,h:500},{x:742,y:0,w:18,h:500},
+      {x:18,y:392,w:200,h:18},         // left door ledge (top=392)
+      {x:300,y:392,w:160,h:18},        // centre low
+      {x:542,y:392,w:200,h:18},        // right door ledge
+      {x:170,y:286,w:120,h:18},
+      {x:470,y:286,w:120,h:18},
+      {x:300,y:182,w:160,h:18},        // top centre
+    ],
+    lava:[{x:230,y:452,w:70,h:18}],
+    water:[{x:460,y:452,w:70,h:18}],
+    toxic:[{x:355,y:452,w:50,h:18}],
+    springs:[{x:345,y:380}],           // on centre-low platform → reach top centre
+    ladders:[
+      {x:60,y:392,h:78},               // floor → left door ledge
+      {x:660,y:392,h:78},              // floor → right door ledge
+      {x:200,y:286,h:106},             // left ledge → left mid
+      {x:520,y:286,h:106},             // right ledge → right mid
+    ],
+    spikes:[{x:560,y:458,w:60}],
+    blades:[{x:380,y:60,len:150,phase:0}],
+    fireGems:[{x:210,y:258},{x:360,y:154}],
+    waterGems:[{x:510,y:258},{x:395,y:154}],
+    fireDoor:{x:40,y:338},             // base 392 = left ledge top
+    waterDoor:{x:680,y:338},           // base 392 = right ledge top
+    fireStart:{x:120,y:357},
+    waterStart:{x:600,y:357},
+  },
+  /* ── HALL III — vertical climb + two blades. Doors atop the side towers. ── */
+  {
+    platforms:[
+      {x:0,y:470,w:760,h:30},
+      {x:0,y:0,w:18,h:500},{x:742,y:0,w:18,h:500},
+      {x:18,y:392,w:150,h:18},         // left lower ledge
+      {x:592,y:392,w:150,h:18},        // right lower ledge
+      {x:330,y:392,w:100,h:18},        // centre low isle
+      {x:180,y:300,w:120,h:18},        // left mid
+      {x:460,y:300,w:120,h:18},        // right mid
+      {x:18,y:206,w:150,h:18},         // left tower top (fire door)
+      {x:592,y:206,w:150,h:18},        // right tower top (water door)
+      {x:300,y:150,w:160,h:18},        // top centre
+    ],
+    lava:[{x:200,y:452,w:80,h:18}],
+    water:[{x:480,y:452,w:80,h:18}],
+    toxic:[{x:340,y:452,w:80,h:18}],
+    springs:[{x:355,y:380},{x:60,y:380},{x:640,y:380}], // all on solid ledges
+    ladders:[
+      {x:200,y:300,h:96},              // left mid → centre-low region
+      {x:520,y:300,h:96},              // right mid → centre-low region
+      {x:60,y:206,h:190},              // left lower ledge → left tower top
+      {x:640,y:206,h:190},             // right lower ledge → right tower top
+    ],
+    spikes:[{x:350,y:458,w:60}],
+    blades:[{x:250,y:40,len:120,phase:0},{x:510,y:40,len:120,phase:Math.PI}],
+    fireGems:[{x:230,y:272},{x:355,y:122}],
+    waterGems:[{x:490,y:272},{x:405,y:122}],
+    fireDoor:{x:50,y:152},             // base 206 = left tower top
+    waterDoor:{x:674,y:152},           // base 206 = right tower top
+    fireStart:{x:60,y:357},
+    waterStart:{x:640,y:357},
+  },
+];
+
+/* ── STATE ── */
+let level,fire,water,gems,gameRunning=false,won=false,currentLevel=0,deathFlash=0;
+
+function mkPlayer(s,type){
+  return {x:s.x,y:s.y,vx:0,vy:0,onGround:false,onLadder:false,type,alive:true,atDoor:false,face:1,squash:0};
+}
+function initLevel(idx){
+  level=JSON.parse(JSON.stringify(LEVELS[idx]));
+  fire=mkPlayer(level.fireStart,'fire');
+  water=mkPlayer(level.waterStart,'water');
+  gems={
+    fire:level.fireGems.map(g=>({...g,collected:false})),
+    water:level.waterGems.map(g=>({...g,collected:false})),
+  };
+  won=false;
+  levelInfo.textContent='Hall '+ROM[idx];
+}
+
+/* ── COLLISION ── */
+function overlap(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
+
+const LADW=24, SPRW=30, SPRH=12;
+
+function updatePlayer(p,inX,jump,up,down,lvl,t){
+  if(!p.alive)return;
+  if(inX!==0)p.face=inX>0?1:-1;
+
+  // Ladder detection
+  let onLad=false, ladX=0;
+  for(const l of lvl.ladders){
+    if(overlap(p.x,p.y,PW,PH,l.x,l.y,LADW,l.h)){ onLad=true; ladX=l.x+LADW/2; }
+  }
+  p.onLadder=onLad;
+
+  // Horizontal
+  p.vx=inX*SPEED;
+  p.x+=p.vx;
+  for(const pl of lvl.platforms){
+    if(overlap(p.x,p.y,PW,PH,pl.x,pl.y,pl.w,pl.h)){
+      if(p.vx>0)p.x=pl.x-PW; else if(p.vx<0)p.x=pl.x+pl.w; p.vx=0;
+    }
+  }
+
+  // Vertical — ladder mode vs gravity mode
+  if(onLad && (up||down)){
+    p.vy=0;
+    p.y += (down?CLIMB:0)-(up?CLIMB:0);
+    // gentle snap toward ladder centre
+    const cx=p.x+PW/2;
+    p.x += (ladX-cx)*0.2;
+  } else {
+    if(jump && p.onGround){ p.vy=JUMP; p.onGround=false; p.squash=-1; }
+    p.vy+=GRAV;
+    if(p.vy>MAXVY)p.vy=MAXVY;
+    p.y+=p.vy;
+  }
+
+  // Platform vertical resolve
+  p.onGround=false;
+  for(const pl of lvl.platforms){
+    if(overlap(p.x,p.y,PW,PH,pl.x,pl.y,pl.w,pl.h)){
+      if(p.vy>0){p.y=pl.y-PH;p.onGround=true;}
+      else if(p.vy<0){p.y=pl.y+pl.h;}
+      p.vy=0;
+    }
+  }
+
+  // Springs — launch
+  for(const s of lvl.springs){
+    if(overlap(p.x,p.y,PW,PH,s.x,s.y,SPRW,SPRH) && p.vy>=0){
+      p.vy=BOUNCE; p.onGround=false; p.squash=-1.4; s._fire=t;
+    }
+  }
+
+  // Hazards
+  for(const h of lvl.lava)  if(overlap(p.x,p.y,PW,PH,h.x,h.y,h.w,h.h)&&p.type==='water')p.alive=false;
+  for(const h of lvl.water) if(overlap(p.x,p.y,PW,PH,h.x,h.y,h.w,h.h)&&p.type==='fire') p.alive=false;
+  for(const h of lvl.toxic) if(overlap(p.x,p.y,PW,PH,h.x,h.y,h.w,h.h))p.alive=false;
+  for(const sp of lvl.spikes){
+    if(overlap(p.x,p.y,PW,PH,sp.x,sp.y,sp.w,12))p.alive=false;
+  }
+  // Blades
+  for(const b of lvl.blades){
+    const ang=Math.sin(t*1.6+b.phase)*1.15;
+    const bx=b.x+Math.sin(ang)*b.len;
+    const by=b.y+Math.cos(ang)*b.len;
+    if(overlap(p.x,p.y,PW,PH,bx-14,by-14,28,28))p.alive=false;
+  }
+
+  // Out of bounds
+  if(p.y>H+40)p.alive=false;
+
+  if(p.squash<0)p.squash+=0.12; if(p.squash>0)p.squash=0;
+}
+
+function atDoor(p,d){
+  // door spans x..x+36, base at y+54; player must overlap the doorway horizontally
+  // and have their feet near the door base (standing on the same ledge)
+  const horiz = (p.x+PW/2) > d.x-6 && (p.x+PW/2) < d.x+42;
+  const vert  = Math.abs((p.y+PH)-(d.y+54)) < 30;
+  return horiz && vert;
+}
+
+/* ── DRAWING ── */
+
+function drawBackground(t){
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#1c1226');bg.addColorStop(0.5,'#120c1c');bg.addColorStop(1,'#080510');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // back wall — stone block masonry, dim
+  ctx.save();
+  ctx.globalAlpha=0.5;
+  for(let y=0;y<H;y+=44){
+    const off=(Math.floor(y/44)%2)*46;
+    for(let x=-46;x<W;x+=92){
+      ctx.fillStyle=((x+y)%184===0)?'#1a1322':'#171020';
+      ctx.fillRect(x+off,y,90,42);
+      ctx.strokeStyle='rgba(0,0,0,0.4)';
+      ctx.lineWidth=2;ctx.strokeRect(x+off,y,90,42);
+      ctx.strokeStyle='rgba(120,90,140,0.05)';
+      ctx.strokeRect(x+off+1,y+1,88,40);
+    }
+  }
+  ctx.restore();
+
+  // arched windows with moonlight
+  for(const wx of [150,610]){
+    ctx.save();
+    const g=ctx.createLinearGradient(0,60,0,220);
+    g.addColorStop(0,'rgba(120,150,220,0.12)');g.addColorStop(1,'rgba(60,80,160,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.moveTo(wx-26,200);ctx.lineTo(wx-26,100);
+    ctx.arc(wx,100,26,Math.PI,0);ctx.lineTo(wx+26,200);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+
+  // wall torches flicker
+  for(const tx of [70,690]){
+    const fl=Math.sin(t*9+tx)*0.3+0.7;
+    const g=ctx.createRadialGradient(tx,150,4,tx,150,90);
+    g.addColorStop(0,`rgba(255,150,40,${0.28*fl})`);
+    g.addColorStop(1,'rgba(255,120,20,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(tx,150,90,0,Math.PI*2);ctx.fill();
+    // bracket + flame
+    ctx.fillStyle='#3a2a1a';ctx.fillRect(tx-3,150,6,30);
+    for(let i=0;i<3;i++){
+      const fy=150-i*5-Math.random()*2;
+      ctx.fillStyle=i===0?'#fff0a0':(i===1?'#ffb030':'#ff6010');
+      ctx.beginPath();ctx.ellipse(tx,fy,5-i,9-i*2.5,0,0,Math.PI*2);ctx.fill();
+    }
+  }
+}
+
+function drawPlatform(pl){
+  // drop shadow on the wall behind/below
+  ctx.fillStyle='rgba(0,0,0,0.45)';
+  ctx.fillRect(pl.x+5,pl.y+5,pl.w,pl.h+6);
+
+  // stone slab body
+  const g=ctx.createLinearGradient(pl.x,pl.y,pl.x,pl.y+pl.h);
+  g.addColorStop(0,'#7d6a8e');g.addColorStop(0.18,'#5b4a72');g.addColorStop(1,'#352a4a');
+  ctx.fillStyle=g;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+
+  // top moss/light edge
+  ctx.fillStyle='rgba(180,200,160,0.18)';ctx.fillRect(pl.x,pl.y,pl.w,2);
+  ctx.fillStyle='rgba(255,240,210,0.22)';ctx.fillRect(pl.x,pl.y,pl.w,1);
+
+  // block seams
+  ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=1.5;
+  for(let bx=pl.x+34;bx<pl.x+pl.w;bx+=34){
+    ctx.beginPath();ctx.moveTo(bx,pl.y);ctx.lineTo(bx,pl.y+pl.h);ctx.stroke();
+  }
+  // bottom shade
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(pl.x,pl.y+pl.h-3,pl.w,3);
+}
+
+function drawHazard(h,type,t){
+  const g=ctx.createLinearGradient(h.x,h.y,h.x,h.y+h.h+14);
+  if(type==='lava'){g.addColorStop(0,'#ffb030');g.addColorStop(0.4,'#ff4800');g.addColorStop(1,'#5a0a00');}
+  else if(type==='water'){g.addColorStop(0,'#7fd4ff');g.addColorStop(0.4,'#1e88e5');g.addColorStop(1,'#06205a');}
+  else{g.addColorStop(0,'#9cff7a');g.addColorStop(0.4,'#3fa83f');g.addColorStop(1,'#0d3010');}
+  ctx.fillStyle=g;ctx.fillRect(h.x,h.y,h.w,h.h+10);
+
+  // glow
+  ctx.save();
+  const col=type==='lava'?'255,110,20':type==='water'?'60,160,230':'90,220,90';
+  const gl=ctx.createRadialGradient(h.x+h.w/2,h.y,2,h.x+h.w/2,h.y,h.w*0.7);
+  gl.addColorStop(0,`rgba(${col},0.35)`);gl.addColorStop(1,`rgba(${col},0)`);
+  ctx.fillStyle=gl;ctx.fillRect(h.x-20,h.y-30,h.w+40,h.h+40);
+  ctx.restore();
+
+  // animated surface
+  ctx.fillStyle=type==='lava'?'rgba(255,220,120,0.7)':type==='water'?'rgba(190,235,255,0.6)':'rgba(200,255,190,0.5)';
+  for(let i=0;i<h.w;i+=11){
+    const wv=Math.sin(t*3+i*0.5)*3;
+    ctx.fillRect(h.x+i,h.y+wv,9,4);
+  }
+  // bubbles
+  for(let i=0;i<h.w;i+=26){
+    const by=h.y+ ((t*22+i*7)%(h.h+8));
+    ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.arc(h.x+i+8,h.y+h.h-(by-h.y),1.6,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawSpring(s,t){
+  const x=s.x,y=s.y;
+  const fired=s._fire && (t-s._fire)<0.25;
+  const comp=fired?6:0;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x+3,y+SPRH+2,SPRW,4);
+  // base
+  ctx.fillStyle='#2a2030';ctx.fillRect(x,y+SPRH-4,SPRW,6);
+  // coils
+  ctx.strokeStyle='#b9a25a';ctx.lineWidth=2.5;
+  ctx.beginPath();
+  for(let i=0;i<=3;i++){
+    const cy=y+comp+ i*(SPRH-comp-3)/3;
+    ctx.moveTo(x+2,cy);ctx.lineTo(x+SPRW-2,cy+2);
+  }
+  ctx.stroke();
+  // top pad
+  const g=ctx.createLinearGradient(x,y+comp,x,y+comp+5);
+  g.addColorStop(0,'#ffe08a');g.addColorStop(1,'#c08020');
+  ctx.fillStyle=g;ctx.fillRect(x-2,y+comp-3,SPRW+4,6);
+  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fillRect(x-2,y+comp-3,SPRW+4,1.5);
+}
+
+function drawLadder(l){
+  const x=l.x;
+  // rails — dark iron with highlight
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x+3,l.y+2,LADW,l.h); // shadow
+  ctx.fillStyle='#4a3a28';ctx.fillRect(x,l.y,4,l.h);
+  ctx.fillStyle='#4a3a28';ctx.fillRect(x+LADW-4,l.y,4,l.h);
+  ctx.fillStyle='rgba(200,160,100,0.3)';ctx.fillRect(x+1,l.y,1.5,l.h);
+  ctx.fillStyle='rgba(200,160,100,0.3)';ctx.fillRect(x+LADW-3,l.y,1.5,l.h);
+  // rungs
+  for(let ry=l.y+8;ry<l.y+l.h-2;ry+=16){
+    ctx.fillStyle='#5a4632';ctx.fillRect(x,ry,LADW,4);
+    ctx.fillStyle='rgba(210,170,110,0.35)';ctx.fillRect(x,ry,LADW,1.2);
+  }
+}
+
+function drawSpikes(sp){
+  const n=Math.floor(sp.w/12);
+  for(let i=0;i<n;i++){
+    const sx=sp.x+i*12;
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.beginPath();ctx.moveTo(sx+2,sp.y+12);ctx.lineTo(sx+8,sp.y-2);ctx.lineTo(sx+14,sp.y+12);ctx.fill();
+    const g=ctx.createLinearGradient(sx,sp.y-2,sx,sp.y+12);
+    g.addColorStop(0,'#e8e0d0');g.addColorStop(1,'#6a5f55');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.moveTo(sx,sp.y+12);ctx.lineTo(sx+6,sp.y-3);ctx.lineTo(sx+12,sp.y+12);ctx.fill();
+  }
+}
+
+function drawBlade(b,t){
+  const ang=Math.sin(t*1.6+b.phase)*1.15;
+  const px=b.x, py=b.y;
+  const bx=px+Math.sin(ang)*b.len;
+  const by=py+Math.cos(ang)*b.len;
+  // pivot
+  ctx.fillStyle='#2a2230';ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#b9a25a';ctx.lineWidth=1.5;ctx.stroke();
+  // chain
+  ctx.strokeStyle='rgba(120,110,130,0.7)';ctx.lineWidth=2.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(bx,by);ctx.stroke();
+  ctx.setLineDash([]);
+  // blade — crescent
+  ctx.save();
+  ctx.translate(bx,by);ctx.rotate(ang);
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  ctx.beginPath();ctx.ellipse(2,2,18,11,0,0,Math.PI*2);ctx.fill();
+  const g=ctx.createLinearGradient(-18,0,18,0);
+  g.addColorStop(0,'#9aa4b0');g.addColorStop(0.5,'#e8eef4');g.addColorStop(1,'#7a8490');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.moveTo(-18,0);ctx.quadraticCurveTo(0,-13,18,0);ctx.quadraticCurveTo(0,13,-18,0);ctx.fill();
+  ctx.fillStyle='#3a3340';ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawDoor(d,type,reached,t){
+  const dw=36,dh=54,x=d.x,y=d.y;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(x+4,y+4,dw,dh);
+  // arch stone frame
+  ctx.fillStyle='#2e2640';
+  ctx.beginPath();
+  ctx.moveTo(x-4,y+dh);ctx.lineTo(x-4,y+14);ctx.arc(x+dw/2,y+14,dw/2+4,Math.PI,0);
+  ctx.lineTo(x+dw+4,y+dh);ctx.closePath();ctx.fill();
+  // door interior glow
+  const base=type==='fire'?[255,120,40]:[70,180,235];
+  const a=reached?0.9:0.32;
+  const g=ctx.createLinearGradient(x,y,x,y+dh);
+  g.addColorStop(0,`rgba(${base[0]},${base[1]},${base[2]},${a})`);
+  g.addColorStop(1,`rgba(${base[0]*0.4},${base[1]*0.4},${base[2]*0.5},${a})`);
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(x,y+dh);ctx.lineTo(x,y+14);ctx.arc(x+dw/2,y+14,dw/2,Math.PI,0);
+  ctx.lineTo(x+dw,y+dh);ctx.closePath();ctx.fill();
+  // reached: portal shimmer
+  if(reached){
+    ctx.save();ctx.globalAlpha=0.4+0.3*Math.sin(t*5);
+    ctx.fillStyle=`rgba(255,255,255,0.6)`;
+    ctx.beginPath();
+    ctx.moveTo(x,y+dh);ctx.lineTo(x,y+14);ctx.arc(x+dw/2,y+14,dw/2,Math.PI,0);
+    ctx.lineTo(x+dw,y+dh);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  // crest symbol
+  ctx.fillStyle='rgba(20,12,8,0.8)';
+  ctx.font='18px Cinzel,serif';ctx.textAlign='center';
+  ctx.fillText(type==='fire'?'🜂':'🜄',x+dw/2,y+dh/2+8);
+  // rivets on frame
+  ctx.fillStyle='#564468';
+  for(const ry of [y+22,y+38]){ctx.beginPath();ctx.arc(x-1,ry,1.6,0,7);ctx.fill();ctx.beginPath();ctx.arc(x+dw+1,ry,1.6,0,7);ctx.fill();}
+}
+
+function drawGem(g,type,t){
+  if(g.collected)return;
+  const cx=g.x+8,cy=g.y+8+Math.sin(t*2.5+g.x)*3,r=9;
+  ctx.save();
+  ctx.shadowColor=type==='fire'?'rgba(255,150,30,0.9)':'rgba(40,180,255,0.9)';
+  ctx.shadowBlur=16;
+  // facets
+  const top=type==='fire'?'#ffe27a':'#bff0ff';
+  const mid=type==='fire'?'#ff9a2e':'#34c0f0';
+  const bot=type==='fire'?'#b03000':'#0a4a90';
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r*0.8,cy-r*0.2);ctx.lineTo(cx+r*0.55,cy+r*0.9);
+  ctx.lineTo(cx-r*0.55,cy+r*0.9);ctx.lineTo(cx-r*0.8,cy-r*0.2);ctx.closePath();
+  const gg=ctx.createLinearGradient(cx,cy-r,cx,cy+r);
+  gg.addColorStop(0,top);gg.addColorStop(0.45,mid);gg.addColorStop(1,bot);
+  ctx.fillStyle=gg;ctx.fill();
+  ctx.shadowBlur=0;
+  // top facet shine
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  ctx.beginPath();ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r*0.8,cy-r*0.2);ctx.lineTo(cx,cy-r*0.1);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=type==='fire'?'rgba(255,210,120,0.8)':'rgba(160,230,255,0.8)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r*0.8,cy-r*0.2);ctx.lineTo(cx+r*0.55,cy+r*0.9);
+  ctx.lineTo(cx-r*0.55,cy+r*0.9);ctx.lineTo(cx-r*0.8,cy-r*0.2);ctx.closePath();ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayer(p,t){
+  if(!p.alive)return;
+  const sq=p.squash;
+  const sx=1+Math.abs(sq)*0.25, sy=1-Math.abs(sq)*0.3;
+  const cx=p.x+PW/2, cy=p.y+PH/2;
+  const isFire=p.type==='fire';
+  const bob=p.onGround?0:Math.sin(t*9)*1;
+
+  // ground shadow
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,0.35)';
+  ctx.beginPath();ctx.ellipse(cx,p.y+PH+2,PW*0.5,4,0,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx,cy+bob);
+  ctx.scale(sx,sy);
+
+  // aura
+  const aura=ctx.createRadialGradient(0,0,2,0,0,PW*1.1);
+  if(isFire){aura.addColorStop(0,'rgba(255,150,40,0.35)');aura.addColorStop(1,'rgba(255,100,20,0)');}
+  else{aura.addColorStop(0,'rgba(70,180,255,0.32)');aura.addColorStop(1,'rgba(40,140,230,0)');}
+  ctx.fillStyle=aura;ctx.beginPath();ctx.arc(0,0,PW*1.1,0,Math.PI*2);ctx.fill();
+
+  // body
+  const bg=ctx.createRadialGradient(-3,-5,2,0,0,PW*0.7);
+  if(isFire){bg.addColorStop(0,'#ffdd66');bg.addColorStop(0.5,'#ff6010');bg.addColorStop(1,'#7a0e00');}
+  else{bg.addColorStop(0,'#cdefff');bg.addColorStop(0.5,'#2a9cf0');bg.addColorStop(1,'#06246e');}
+  ctx.fillStyle=bg;
+  ctx.beginPath();ctx.ellipse(0,2,PW/2-1,PH/2-1,0,0,Math.PI*2);ctx.fill();
+
+  // body rim light
+  ctx.strokeStyle=isFire?'rgba(255,220,120,0.5)':'rgba(170,230,255,0.5)';
+  ctx.lineWidth=1.2;ctx.beginPath();ctx.ellipse(-1,1,PW/2-2,PH/2-2,0,Math.PI*0.7,Math.PI*1.7);ctx.stroke();
+
+  // head
+  ctx.fillStyle=isFire?'#ff7a22':'#26a0f2';
+  ctx.beginPath();ctx.arc(0,-PH/2+8,PW/2-2,0,Math.PI*2);ctx.fill();
+
+  // eyes (look toward facing dir)
+  const ex=p.face*1.5;
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(-4+ex,-PH/2+7,3.4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(4+ex,-PH/2+7,3.4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#140a04';
+  ctx.beginPath();ctx.arc(-4+ex*1.6,-PH/2+7,1.7,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(4+ex*1.6,-PH/2+7,1.7,0,Math.PI*2);ctx.fill();
+
+  // crown of element
+  if(isFire){
+    for(let i=-1;i<=1;i++){
+      const fx=i*5,fy=-PH/2+3,fl=6+Math.sin(t*7+i*1.7)*3;
+      ctx.fillStyle=i===0?'#fff080':'#ff9020';
+      ctx.beginPath();ctx.moveTo(fx-3,fy+2);ctx.quadraticCurveTo(fx,fy-fl,fx+3,fy+2);ctx.fill();
+    }
+  } else {
+    ctx.fillStyle='#bfeaff';
+    ctx.beginPath();ctx.arc(0,-PH/2+3,PW/2-3,Math.PI,0);ctx.fill();
+    const dr=Math.sin(t*3)*2;
+    ctx.fillStyle='#5cc6e8';
+    ctx.beginPath();ctx.arc(-5,-PH/2+1+dr,2,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(5,-PH/2+1-dr,2,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawHUD(){
+  const fc=gems.fire.filter(g=>g.collected).length,ft=gems.fire.length;
+  const wc=gems.water.filter(g=>g.collected).length,wt=gems.water.length;
+  ctx.font='600 15px Cinzel,serif';
+  ctx.fillStyle='#ff9a52';ctx.textAlign='left';
+  ctx.fillText(`◆ ${fc}/${ft}`,28,26);
+  ctx.fillStyle='#6dd0ee';ctx.textAlign='right';
+  ctx.fillText(`${wc}/${wt} ◆`,W-28,26);
+
+  // Gate status — tells players the win condition clearly
+  ctx.font='600 13px Cinzel,serif';ctx.textAlign='center';
+  const fAt=fire.atDoor, wAt=water.atDoor;
+  let banner, col;
+  if(fAt&&wAt){ banner='Both gates held — opening…'; col='#ffe9a8'; }
+  else if(fAt){ banner='Ember waits at the gate — bring Tide!'; col='#ff9a52'; }
+  else if(wAt){ banner='Tide waits at the gate — bring Ember!'; col='#6dd0ee'; }
+  else { banner='Reach both gates together to open the way'; col='#8a7c92'; }
+  ctx.fillStyle=col;
+  ctx.fillText(banner,W/2,26);
+}
+
+/* ── LOOP ── */
+let t=0;
+function loop(){
+  if(!gameRunning)return;
+  t+=0.016;
+
+  const fX=(keys['KeyD']?1:0)-(keys['KeyA']?1:0);
+  const wX=(keys['ArrowRight']?1:0)-(keys['ArrowLeft']?1:0);
+  updatePlayer(fire,fX,keys['KeyW'],keys['KeyW'],keys['KeyS'],level,t);
+  updatePlayer(water,wX,keys['ArrowUp'],keys['ArrowUp'],keys['ArrowDown'],level,t);
+
+  // gems
+  for(const g of gems.fire) if(!g.collected&&overlap(fire.x,fire.y,PW,PH,g.x,g.y,16,16))g.collected=true;
+  for(const g of gems.water)if(!g.collected&&overlap(water.x,water.y,PW,PH,g.x,g.y,16,16))g.collected=true;
+
+  fire.atDoor=atDoor(fire,level.fireDoor);
+  water.atDoor=atDoor(water,level.waterDoor);
+
+  if(fire.atDoor&&water.atDoor&&!won){
+    won=true;gameRunning=false;
+    const allGems = gems.fire.every(g=>g.collected)&&gems.water.every(g=>g.collected);
+    setTimeout(()=>{
+      if(currentLevel<LEVELS.length-1){
+        currentLevel++;initLevel(currentLevel);
+        msgEl.textContent=allGems?'Hall cleared — every relic claimed!':'Hall cleared!';
+        startBtn.textContent='Descend Further →';
+        overlay.classList.remove('gone');
+      } else {
+        msgEl.textContent='The keep is conquered! 🏰';
+        startBtn.textContent='Play Again';currentLevel=0;
+        overlay.classList.remove('gone');
+      }
+    },650);
+  }
+
+  if((!fire.alive||!water.alive)&&!won){
+    gameRunning=false;
+    setTimeout(()=>{
+      msgEl.textContent = !fire.alive?'Ember has fallen.':'Tide has fallen.';
+      startBtn.textContent='Try This Hall Again';
+      overlay.classList.remove('gone');
+    },250);
+  }
+
+  // RENDER
+  drawBackground(t);
+  for(const h of level.lava)  drawHazard(h,'lava',t);
+  for(const h of level.water) drawHazard(h,'water',t);
+  for(const h of level.toxic) drawHazard(h,'toxic',t);
+  for(const l of level.ladders) drawLadder(l);
+  for(const pl of level.platforms) drawPlatform(pl);
+  for(const sp of level.spikes) drawSpikes(sp);
+  for(const s of level.springs) drawSpring(s,t);
+  drawDoor(level.fireDoor,'fire',fire.atDoor,t);
+  drawDoor(level.waterDoor,'water',water.atDoor,t);
+  for(const g of gems.fire) drawGem(g,'fire',t);
+  for(const g of gems.water)drawGem(g,'water',t);
+  for(const b of level.blades) drawBlade(b,t);
+  drawPlayer(fire,t);
+  drawPlayer(water,t);
+  drawHUD();
+
+  // vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+
+  requestAnimationFrame(loop);
+}
+
+/* ── START ── */
+startBtn.addEventListener('click',()=>{
+  if(startBtn.textContent==='Play Again')currentLevel=0;
+  initLevel(currentLevel);
+  msgEl.textContent='';
+  overlay.classList.add('gone');
+  gameRunning=true;
+  loop();
+});
+
+// idle frame
+initLevel(0);
+(function idle(){
+  if(gameRunning)return;
+  t+=0.016;
+  drawBackground(t);
+  for(const h of level.lava)drawHazard(h,'lava',t);
+  for(const h of level.water)drawHazard(h,'water',t);
+  for(const h of level.toxic)drawHazard(h,'toxic',t);
+  for(const l of level.ladders)drawLadder(l);
+  for(const pl of level.platforms)drawPlatform(pl);
+  for(const sp of level.spikes)drawSpikes(sp);
+  for(const s of level.springs)drawSpring(s,t);
+  drawDoor(level.fireDoor,'fire',false,t);
+  drawDoor(level.waterDoor,'water',false,t);
+  for(const g of gems.fire)drawGem(g,'fire',t);
+  for(const g of gems.water)drawGem(g,'water',t);
+  for(const b of level.blades)drawBlade(b,t);
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  requestAnimationFrame(idle);
+})();
+</script>
+</body>
+</html>
